@@ -70,7 +70,6 @@
                 const now = Date.now();
                 const newExpiry = now + (totalMins * 60 * 1000);
                 
-                // Set the session with a fresh updated timestamp
                 await userRef.child('laptop_session').set({
                     expiry: newExpiry,
                     last_updated: now
@@ -86,6 +85,7 @@
                 alert("Signal Sent! Your laptop will unlock now.");
             } else {
                 alert("Insufficient Funds in CEN Bank!");
+                currentWin.setAlwaysOnTop(true, "screen-saver");
             }
         } catch (error) {
             console.error(error);
