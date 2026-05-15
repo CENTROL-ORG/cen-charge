@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CEN Recharge</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        body { background: #0f0f0f; color: white; font-family: sans-serif; text-align: center; padding: 20px; }
+        .card { background: #1a1a1a; padding: 30px; border-radius: 20px; border: 1px solid #333; }
+        .btn-pay { background: #00ff88; color: black; border: none; padding: 15px 30px; border-radius: 10px; font-weight: bold; width: 100%; margin-top: 20px; }
+        select { width: 100%; padding: 15px; background: #000; color: white; border: 1px solid #444; border-radius: 10px; }
+        .price-tag { font-size: 1.2rem; color: #888; margin: 15px 0; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2 style="color: #00ff88;">CEN RECHARGE</h2>
+        <p>Current Rate: 200 CEN / Hour</p>
+        
+        <label>Select Duration:</label>
+        <select id="duration" onchange="updatePrice()">
+            <option value="15">15 Minutes (₹50)</option>
+            <option value="30" selected>30 Minutes (₹100)</option>
+            <option value="60">1 Hour (₹200)</option>
+            <option value="120">2 Hours (₹400)</option>
+        </select>
+
+        <div class="price-tag" id="display-price">Total: ₹100</div>
+        
+        <button class="btn-pay" onclick="rechargeSystem()">UNLOACK LAPTOP NOW</button>
+    </div>
+
+<script>
+    const firebaseConfig = { databaseURL: "https://centrol-bank-default-rtdb.asia-southeast1.firebasedatabase.app" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const userId = "pranshi_main";
+
+    function updatePrice() {
+        const mins = document.getElementById('duration').value;
+        const price = (mins / 60) * 200;
+        document.getElementById('display-price').innerText = `Total: ₹${price}`;
+    }
+
+    async function rechargeSystem() {
+        const mins = parseInt(document.getElementById('duration').value);
+        const cost = (mins / 60) * 200;
+
+        const userRef = db.ref(`users/${userId}`);
+        const balSnap = await userRef.child('balance').once('value');
+        let currentBal = balSnap.val() || 0;
+
+        if (currentBal >= cost) {
+            // 1. Deduct Money
+            await userRef.child('balance').set(currentBal - cost);
+
+            // 2. Add Time to Laptop
+            const sessionRef = userRef.child('laptop_session');
+            const currentSession = await sessionRef.once('value');
+            let currentExpiry = currentSession.val()?.expiry || Date.now();
+            
+            // If already expired, start from "now", otherwise add to remaining time
+            const baseTime = Math.max(currentExpiry, Date.now());
+            const newExpiry = baseTime + (mins * 60 * 1000);
+
+            await sessionRef.set({
+                expiry: newExpiry,
+                status: "unlocked"
+            });
+
+            // 3. Log Transaction
+            await userRef.child('history').push({
+                amount: -cost,
+                description: `LAPTOP RECHARGE: ${mins} Mins`,
+                timestamp: new Date().toLocaleString(),
+                type: "DEBIT"
+            });
+
+            alert(`Recharged! Laptop unlocked for ${mins} mins.`);
+        } else {
+            alert("Insufficient Bank Balance!");
+        }
+    }
+</script>
+</body>
+</html>
