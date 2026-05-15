@@ -8,18 +8,19 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
         body { background: #0f0f0f; color: white; font-family: 'Segoe UI', sans-serif; padding: 20px; display: flex; justify-content: center; }
-        .card { background: #1a1a1a; padding: 30px; border-radius: 20px; border: 1px solid #333; width: 100%; max-width: 400px; }
+        .card { background: #1a1a1a; padding: 30px; border-radius: 20px; border: 1px solid #333; width: 100%; max-width: 400px; margin-top: 50px; }
         .input-group { margin: 20px 0; text-align: left; }
         label { color: #888; font-size: 12px; font-weight: bold; }
-        input { width: 100%; padding: 12px; background: #000; border: 1px solid #444; color: #00ff88; border-radius: 8px; margin-top: 5px; outline: none; font-size: 18px; }
+        input { width: 100%; padding: 12px; background: #000; border: 1px solid #444; color: #00ff88; border-radius: 8px; margin-top: 5px; outline: none; font-size: 18px; box-sizing: border-box; }
         .price-display { background: #222; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #00ff88; }
-        .btn-pay { background: #00ff88; color: #000; border: none; padding: 18px; border-radius: 12px; font-weight: 800; width: 100%; cursor: pointer; }
+        .btn-pay { background: #00ff88; color: #000; border: none; padding: 18px; border-radius: 12px; font-weight: 800; width: 100%; cursor: pointer; font-size: 16px; transition: 0.2s; }
+        .btn-pay:hover { background: #00cc6e; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h2 style="margin-top:0">CEN RECHARGE</h2>
+        <h2 style="margin-top:0; letter-spacing: 1px;">CEN RECHARGE</h2>
         
         <div class="input-group">
             <label>HOURS</label>
@@ -59,29 +60,36 @@
         if (totalMins <= 0) return alert("Enter a valid time!");
 
         const userRef = db.ref(`users/${userId}`);
-        const balSnap = await userRef.child('balance').once('value');
-        let currentBal = balSnap.val() || 0;
+        try {
+            const balSnap = await userRef.child('balance').once('value');
+            let currentBal = balSnap.val() || 0;
 
-        if (currentBal >= price) {
-            await userRef.child('balance').set(currentBal - price);
-            
-            // Push the new expiry
-            const newExpiry = Date.now() + (totalMins * 60 * 1000);
-            await userRef.child('laptop_session').set({
-                expiry: newExpiry,
-                last_updated: Date.now() // For the locker to know this is a FRESH signal
-            });
+            if (currentBal >= price) {
+                await userRef.child('balance').set(currentBal - price);
+                
+                const now = Date.now();
+                const newExpiry = now + (totalMins * 60 * 1000);
+                
+                // Set the session with a fresh updated timestamp
+                await userRef.child('laptop_session').set({
+                    expiry: newExpiry,
+                    last_updated: now
+                });
 
-            await userRef.child('history').push({
-                amount: -price,
-                description: `SYSTEM RECHARGE: ${totalMins}m`,
-                timestamp: new Date().toLocaleString(),
-                type: "DEBIT"
-            });
+                await userRef.child('history').push({
+                    amount: -price,
+                    description: `SYSTEM RECHARGE: ${totalMins}m`,
+                    timestamp: new Date().toLocaleString(),
+                    type: "DEBIT"
+                });
 
-            alert("Signal Sent! Your laptop will unlock now.");
-        } else {
-            alert("Insufficient Funds in CEN Bank!");
+                alert("Signal Sent! Your laptop will unlock now.");
+            } else {
+                alert("Insufficient Funds in CEN Bank!");
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Database connection error!");
         }
     }
 </script>
