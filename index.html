@@ -3,85 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CEN Recharge</title>
+    <title>CEN Recharge | Custom Control</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
-        body { background: #0f0f0f; color: white; font-family: sans-serif; text-align: center; padding: 20px; }
-        .card { background: #1a1a1a; padding: 30px; border-radius: 20px; border: 1px solid #333; }
-        .btn-pay { background: #00ff88; color: black; border: none; padding: 15px 30px; border-radius: 10px; font-weight: bold; width: 100%; margin-top: 20px; }
-        select { width: 100%; padding: 15px; background: #000; color: white; border: 1px solid #444; border-radius: 10px; }
-        .price-tag { font-size: 1.2rem; color: #888; margin: 15px 0; }
+        body { background: #0f0f0f; color: white; font-family: 'Segoe UI', sans-serif; padding: 20px; display: flex; justify-content: center; }
+        .card { background: #1a1a1a; padding: 30px; border-radius: 20px; border: 1px solid #333; width: 100%; max-width: 400px; }
+        .input-group { margin: 20px 0; text-align: left; }
+        label { color: #888; font-size: 12px; font-weight: bold; }
+        input { width: 100%; padding: 12px; background: #000; border: 1px solid #444; color: #00ff88; border-radius: 8px; margin-top: 5px; outline: none; font-size: 18px; }
+        .price-display { background: #222; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #00ff88; }
+        .btn-pay { background: #00ff88; color: #000; border: none; padding: 18px; border-radius: 12px; font-weight: 800; width: 100%; cursor: pointer; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h2 style="color: #00ff88;">CEN RECHARGE</h2>
-        <p>Current Rate: 200 CEN / Hour</p>
+        <h2 style="margin-top:0">CEN RECHARGE</h2>
         
-        <label>Select Duration:</label>
-        <select id="duration" onchange="updatePrice()">
-            <option value="15">15 Minutes (₹50)</option>
-            <option value="30" selected>30 Minutes (₹100)</option>
-            <option value="60">1 Hour (₹200)</option>
-            <option value="120">2 Hours (₹400)</option>
-        </select>
+        <div class="input-group">
+            <label>HOURS</label>
+            <input type="number" id="custom-hrs" value="0" min="0" oninput="calculatePrice()">
+        </div>
+        
+        <div class="input-group">
+            <label>MINUTES</label>
+            <input type="number" id="custom-mins" value="30" min="0" max="59" oninput="calculatePrice()">
+        </div>
 
-        <div class="price-tag" id="display-price">Total: ₹100</div>
+        <div class="price-display">
+            <div style="font-size: 12px; color: #888;">ESTIMATED COST</div>
+            <div id="final-price" style="font-size: 24px; font-weight: bold;">₹100.00</div>
+        </div>
         
-        <button class="btn-pay" onclick="rechargeSystem()">UNLOACK LAPTOP NOW</button>
+        <button class="btn-pay" onclick="processRecharge()">AUTHORIZE & UNLOCK</button>
     </div>
 
 <script>
     const firebaseConfig = { databaseURL: "https://centrol-bank-default-rtdb.asia-southeast1.firebasedatabase.app" };
-    firebase.initializeApp(firebaseConfig);
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     const userId = "pranshi_main";
 
-    function updatePrice() {
-        const mins = document.getElementById('duration').value;
-        const price = (mins / 60) * 200;
-        document.getElementById('display-price').innerText = `Total: ₹${price}`;
+    function calculatePrice() {
+        const hrs = parseFloat(document.getElementById('custom-hrs').value) || 0;
+        const mins = parseFloat(document.getElementById('custom-mins').value) || 0;
+        const totalMins = (hrs * 60) + mins;
+        const price = (totalMins / 60) * 200;
+        document.getElementById('final-price').innerText = `₹${price.toFixed(2)}`;
+        return { totalMins, price };
     }
 
-    async function rechargeSystem() {
-        const mins = parseInt(document.getElementById('duration').value);
-        const cost = (mins / 60) * 200;
+    async function processRecharge() {
+        const { totalMins, price } = calculatePrice();
+        if (totalMins <= 0) return alert("Enter a valid time!");
 
         const userRef = db.ref(`users/${userId}`);
         const balSnap = await userRef.child('balance').once('value');
         let currentBal = balSnap.val() || 0;
 
-        if (currentBal >= cost) {
-            // 1. Deduct Money
-            await userRef.child('balance').set(currentBal - cost);
-
-            // 2. Add Time to Laptop
-            const sessionRef = userRef.child('laptop_session');
-            const currentSession = await sessionRef.once('value');
-            let currentExpiry = currentSession.val()?.expiry || Date.now();
+        if (currentBal >= price) {
+            await userRef.child('balance').set(currentBal - price);
             
-            // If already expired, start from "now", otherwise add to remaining time
-            const baseTime = Math.max(currentExpiry, Date.now());
-            const newExpiry = baseTime + (mins * 60 * 1000);
-
-            await sessionRef.set({
+            // Push the new expiry
+            const newExpiry = Date.now() + (totalMins * 60 * 1000);
+            await userRef.child('laptop_session').set({
                 expiry: newExpiry,
-                status: "unlocked"
+                last_updated: Date.now() // For the locker to know this is a FRESH signal
             });
 
-            // 3. Log Transaction
             await userRef.child('history').push({
-                amount: -cost,
-                description: `LAPTOP RECHARGE: ${mins} Mins`,
+                amount: -price,
+                description: `SYSTEM RECHARGE: ${totalMins}m`,
                 timestamp: new Date().toLocaleString(),
                 type: "DEBIT"
             });
 
-            alert(`Recharged! Laptop unlocked for ${mins} mins.`);
+            alert("Signal Sent! Your laptop will unlock now.");
         } else {
-            alert("Insufficient Bank Balance!");
+            alert("Insufficient Funds in CEN Bank!");
         }
     }
 </script>
